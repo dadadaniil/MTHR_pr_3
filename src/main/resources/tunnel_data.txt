@@ -1,8 +1,0 @@
-maxTrainsInTunnel=2
-maxConsecutiveDirection=3
-1;0;5
-2;1;4
-3;0;3
-4;1;2
-5;0;6
-6;1;3

@@ -1,15 +1,13 @@
 package com.example.tunnel;
 
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
-
+import java.util.concurrent.locks.*;
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class TunnelController {
 
     private static volatile TunnelController instance;
+    private static final Lock initLock = new ReentrantLock();
 
     private final Lock lock = new ReentrantLock();
     private final Condition canEnter = lock.newCondition();
@@ -26,14 +24,25 @@ public class TunnelController {
         this.maxConsecutiveDirection = maxConsecutiveDirection;
     }
 
-
     public static TunnelController getInstance(int maxTrains, int maxDir) {
         if (instance == null) {
-            synchronized (TunnelController.class) {
+            initLock.lock();
+            try {
                 if (instance == null) {
                     instance = new TunnelController(maxTrains, maxDir);
+                    log.info("TunnelController initialized with maxTrains={}, maxConsecutiveDirection={}",
+                        maxTrains, maxDir);
                 }
+            } finally {
+                initLock.unlock();
             }
+        }
+        return instance;
+    }
+
+    public static TunnelController getInstance() {
+        if (instance == null) {
+            throw new IllegalStateException("TunnelController has not been initialized. Call getInstance(int, int) first.");
         }
         return instance;
     }
@@ -45,17 +54,13 @@ public class TunnelController {
                 canEnter.await();
             }
 
-            directionInUse = (directionInUse == -1) ? requestedDirection : directionInUse;
-            currentInTunnel++;
-            if (requestedDirection == directionInUse) {
-                consecutiveCount++;
-            } else {
-
+            if (directionInUse == -1) {
                 directionInUse = requestedDirection;
-                consecutiveCount = 1;
             }
-            log.info("Train " + trainId + " entering. Direction="
-                + requestedDirection + ", inTunnel=" + currentInTunnel);
+
+            currentInTunnel++;
+            consecutiveCount = (requestedDirection == directionInUse) ? consecutiveCount + 1 : 1;
+            log.info("Train {} entering. Direction={}, inTunnel={}", trainId, requestedDirection, currentInTunnel);
         } finally {
             lock.unlock();
         }
@@ -65,9 +70,8 @@ public class TunnelController {
         lock.lock();
         try {
             currentInTunnel--;
-            log.info("Train " + trainId + " exiting. inTunnel=" + currentInTunnel);
+            log.info("Train {} exiting. inTunnel={}", trainId, currentInTunnel);
             if (currentInTunnel == 0) {
-
                 directionInUse = -1;
                 consecutiveCount = 0;
             }
@@ -78,23 +82,7 @@ public class TunnelController {
     }
 
     private boolean canTrainEnter(int requestedDirection) {
-        if (directionInUse == -1) {
-
-            return currentInTunnel < maxTrainsInTunnel;
-        }
-        if (directionInUse == requestedDirection) {
-
-            if (currentInTunnel < maxTrainsInTunnel
-                && consecutiveCount < maxConsecutiveDirection) {
-                return true;
-            }
-        } else {
-
-            if (currentInTunnel == 0) {
-
-                return true;
-            }
-        }
-        return false;
+        return (directionInUse == -1 || requestedDirection == directionInUse && consecutiveCount < maxConsecutiveDirection)
+            && currentInTunnel < maxTrainsInTunnel;
     }
 }
