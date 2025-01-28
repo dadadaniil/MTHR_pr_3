@@ -1,11 +1,10 @@
 package com.example.tunnel;
 
-import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
-public class Train implements Callable<Void> {
+public class Train implements Runnable {
     private final int trainId;
     private final int direction;
     private final TunnelController controller;
@@ -19,11 +18,15 @@ public class Train implements Callable<Void> {
     }
 
     @Override
-    public Void call() throws InterruptedException {
-        controller.enterTunnel(trainId, direction);
-        log.info("Train {} is traveling through tunnel...", trainId);
-        TimeUnit.SECONDS.sleep(travelTime);
-        controller.exitTunnel(trainId);
-        return null;
+    public void run() {
+        try {
+            controller.enterTunnel(trainId, direction);
+            log.info("Train {} is traveling through tunnel...", trainId);
+            TimeUnit.SECONDS.sleep(travelTime);
+            controller.exitTunnel(trainId);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.error("Train {} was interrupted", trainId, e);
+        }
     }
 }
